@@ -211,6 +211,8 @@ python app.py
 - Keep `SNIFFY_ALLOWED_ORIGINS` restricted to trusted origins (avoid wildcard `*`)
 - Firewall auto-block actions should be used with explicit operator confirmation
 
-## License
+## ⚖️ License
 
-No license file is currently defined in this repository. Add one if you plan to distribute the project.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+This project is under the **MIT License**.
