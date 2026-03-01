@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snifflux | Security Platform</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/logo.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/snifflux.svg') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0f14;
+            --bg-elev: #111820;
+            --panel: #131c26;
+            --panel-2: #162432;
+            --border: #253447;
+            --text: #e9f0f6;
+            --muted: #8ea1b4;
+            --primary: #35d48f;
+            --primary-soft: rgba(53, 212, 143, 0.15);
+            --danger: #ff5c72;
+            --danger-soft: rgba(255, 92, 114, 0.15);
+            --safe: #72c6ff;
+            --safe-soft: rgba(114, 198, 255, 0.15);
+            --warning: #ffcf5b;
+            --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+        }
+
+        body.light {
+            --bg: #f5f6f1;
+            --bg-elev: #ece8de;
+            --panel: #f8f4ea;
+            --panel-2: #f2ebdd;
+            --border: #c7b89e;
+            --text: #231e16;
+            --muted: #6e6558;
+            --primary: #2a8f56;
+            --primary-soft: rgba(42, 143, 86, 0.14);
+            --danger: #b93d3d;
+            --danger-soft: rgba(185, 61, 61, 0.14);
+            --safe: #3a7da6;
+            --safe-soft: rgba(58, 125, 166, 0.15);
+            --warning: #ad8325;
+            --shadow: 0 12px 30px rgba(62, 45, 20, 0.15);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            padding: 18px;
+            color: var(--text);
+            font-family: "Inter", "Segoe UI", sans-serif;
+            background:
+                radial-gradient(circle at 12% 30%, rgba(53, 212, 143, 0.12), transparent 40%),
+                radial-gradient(circle at 88% 70%, rgba(114, 198, 255, 0.1), transparent 35%),
+                linear-gradient(130deg, var(--bg) 0%, var(--bg-elev) 100%);
+        }
+
+        .app {
+            max-width: 1680px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-rows: auto auto 1fr auto;
+            gap: 14px;
+        }
+
+        .panel {
+            border: 1px solid var(--border);
+            background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+        }
+
+        .top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 16px;
+            flex-wrap: wrap;
+        }
+
+        .brand {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+        }
+
+        .brand img {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: #fff;
+            padding: 5px;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: clamp(1.1rem, 1.8vw, 1.7rem);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .brand p {
+            margin: 3px 0 0 0;
+            color: var(--muted);
+            font-size: 0.88rem;
+            font-weight: 600;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-weight: 700;
+            color: var(--text);
+            background: transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn:hover { transform: translateY(-1px); }
+        .btn.primary {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: #07160f;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            padding: 0 16px 16px 16px;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--muted);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 0.76rem;
+        }
+
+        .tab.active {
+            color: #09140f;
+            border-color: var(--primary);
+            background: var(--primary);
+        }
+
+        .status {
+            margin: 0 16px 16px 16px;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .status.running { color: var(--primary); }
+        .status.error { color: var(--danger); }
+        .status.starting { color: var(--warning); }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+            padding: 0 16px 16px 16px;
+        }
+
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .card .value {
+            font-weight: 900;
+            font-size: 1.55rem;
+            line-height: 1;
+        }
+
+        .card .label {
+            margin-top: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: var(--muted);
+            font-size: 0.73rem;
+            font-weight: 700;
+        }
+
+        .card.regular .value { color: var(--primary); }
+        .card.suspicious .value { color: var(--danger); }
+        .card.safe .value { color: var(--safe); }
+
+        .dash-view {
+            display: none;
+            gap: 14px;
+        }
+
+        .dash-view.active {
+            display: grid;
+        }
+
+        #view-overview.active {
+            grid-template-columns: minmax(0, 1fr) 360px;
+        }
+
+        #view-intel.active {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        #view-history.active {
+            grid-template-columns: 1fr;
+        }
+
+        .stack {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .section { padding: 14px; }
+
+        .section h2 {
+            margin: 0 0 10px 0;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            font-size: 0.9rem;
+        }
+
+        .chart-wrap {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            height: 260px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .filters {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .field label {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--muted);
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: .3px;
+        }
+
+        .field input, .field select, textarea {
+            width: 100%;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text);
+            border-radius: 10px;
+            padding: 8px;
+            font-size: .9rem;
+        }
+
+        .inline-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .table-wrap {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: auto;
+            max-height: 430px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1080px;
+        }
+
+        th, td {
+            padding: 8px 9px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            font-size: 0.82rem;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: var(--panel);
+            color: var(--muted);
+            font-size: .72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            z-index: 2;
+        }
+
+        tbody tr:hover { background: rgba(53, 212, 143, 0.10); }
+        tbody tr.suspicious { background: var(--danger-soft); }
+        tbody tr.safelisted { background: var(--safe-soft); }
+        tbody tr.selected { outline: 2px solid var(--primary); }
+
+        .clickable-ip {
+            color: var(--safe);
+            cursor: pointer;
+            text-decoration: underline dotted;
+            text-underline-offset: 3px;
+            font-weight: 700;
+        }
+
+        .pill {
+            padding: 2px 7px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            display: inline-block;
+            font-size: .69rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .3px;
+        }
+
+        .pill.suspicious { color: var(--danger); }
+        .pill.safelisted { color: var(--safe); }
+        .pill.regular { color: var(--primary); }
+
+        .list {
+            max-height: 250px;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .item {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px;
+            font-size: .81rem;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .item.alert strong { color: var(--danger); }
+        .item.safe strong { color: var(--safe); }
+
+        .details {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            min-height: 220px;
+            padding: 10px;
+            white-space: pre-wrap;
+            line-height: 1.45;
+            font-size: .83rem;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .whois-result {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            min-height: 180px;
+            white-space: pre-wrap;
+            font-size: .84rem;
+            line-height: 1.5;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .panic-box {
+            border: 1px solid var(--danger);
+            border-radius: 12px;
+            background: rgba(255, 92, 114, 0.08);
+            padding: 10px;
+        }
+
+        .panic-box h3 {
+            margin: 0 0 6px 0;
+            color: var(--danger);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: .85rem;
+        }
+
+        .history-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .heatmap-grid {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            overflow: auto;
+        }
+
+        .heatmap-table {
+            display: grid;
+            grid-template-columns: 56px repeat(24, minmax(18px, 1fr));
+            gap: 4px;
+            min-width: 660px;
+            align-items: center;
+        }
+
+        .heat-cell {
+            min-height: 20px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            text-align: center;
+            font-size: .62rem;
+            line-height: 18px;
+            color: var(--text);
+        }
+
+        .heat-label {
+            font-size: .67rem;
+            color: var(--muted);
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .top-attackers {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: auto;
+            max-height: 240px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .top-attackers table {
+            min-width: 100%;
+        }
+
+        .top-attackers th,
+        .top-attackers td {
+            font-size: .78rem;
+            padding: 7px 8px;
+        }
+
+        .danger-note {
+            margin-top: 10px;
+            border: 1px dashed var(--danger);
+            border-radius: 10px;
+            padding: 8px;
+            font-size: .76rem;
+            color: var(--danger);
+            font-weight: 700;
+        }
+
+        .bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 6px;
+            min-height: 160px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .bar {
+            flex: 1;
+            min-width: 12px;
+            background: var(--primary);
+            border-radius: 6px 6px 3px 3px;
+            position: relative;
+        }
+
+        .bar::after {
+            content: attr(data-hour);
+            position: absolute;
+            bottom: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: .62rem;
+            color: var(--muted);
+        }
+
+        .country-list {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            max-height: 220px;
+            overflow: auto;
+            font-size: .83rem;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .country-item {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed var(--border);
+            padding: 6px 0;
+        }
+
+        .country-item:last-child { border-bottom: none; }
+
+        .footer {
+            text-align: center;
+            padding: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: .78rem;
+            font-weight: 700;
+        }
+
+        .empty { color: var(--muted); font-style: italic; }
+
+        @media (max-width: 1400px) {
+            #view-overview.active { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 1200px) {
+            .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            #view-intel.active { grid-template-columns: 1fr; }
+            .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .history-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 760px) {
+            body { padding: 10px; }
+            .stats { grid-template-columns: 1fr 1fr; padding: 0 12px 12px; }
+            .top, .tabs { padding-left: 12px; padding-right: 12px; }
+            .status { margin: 0 12px 12px; }
+            .filters { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 520px) {
+            .stats { grid-template-columns: 1fr; }
+            .actions { width: 100%; }
+            .actions .btn { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <section class="panel">
+        <header class="top">
+            <div class="brand">
+                <img src="{{ url_for('static', filename='img/snifflux.svg') }}" alt="Snifflux Logo">
+                <div>
+                    <h1 id="title">Snifflux Security Platform</h1>
+                    <p id="subtitle">Real-time traffic defense and threat intelligence</p>
+                </div>
+            </div>
+            <div class="actions">
+                <button class="btn" id="langBtn">EN</button>
+                <button class="btn" id="themeBtn">Light</button>
+                <button class="btn primary" id="downloadBtn">Download Report</button>
+            </div>
+        </header>
+        <div class="tabs">
+            <button class="tab active" data-view="overview" id="tabOverview">Live Ops</button>
+            <button class="tab" data-view="intel" id="tabIntel">Threat Intel</button>
+            <button class="tab" data-view="history" id="tabHistory">Alert History</button>
+        </div>
+        <div class="status" id="snifferStatus">Sniffer: waiting...</div>
+        <div class="stats">
+            <article class="card"><div class="value" id="totalPackets">0</div><div class="label" data-i18n="totalPackets">Total packets</div></article>
+            <article class="card regular"><div class="value" id="regularPackets">0</div><div class="label" data-i18n="regularPackets">Regular traffic</div></article>
+            <article class="card suspicious"><div class="value" id="suspiciousPackets">0</div><div class="label" data-i18n="suspiciousPackets">Suspicious packets</div></article>
+            <article class="card safe"><div class="value" id="safelistedPackets">0</div><div class="label" data-i18n="safelistedPackets">Safelisted traffic</div></article>
+            <article class="card"><div class="value" id="currentRate">0</div><div class="label" data-i18n="packetsPerSecond">Packets/sec</div></article>
+        </div>
+    </section>
+
+    <section id="view-overview" class="dash-view active">
+        <div class="stack">
+            <section class="panel section">
+                <h2 data-i18n="trafficTimeline">Traffic timeline</h2>
+                <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+            </section>
+            <section class="panel section">
+                <h2 data-i18n="filtersTitle">Traffic filters</h2>
+                <div class="filters">
+                    <div class="field"><label data-i18n="fromTimestamp">From</label><input type="datetime-local" id="filterStartTs"></div>
+                    <div class="field"><label data-i18n="toTimestamp">To</label><input type="datetime-local" id="filterEndTs"></div>
+                    <div class="field"><label data-i18n="protocol">Protocol</label><select id="filterProtocol"><option value="">ALL</option><option value="TCP">TCP</option><option value="UDP">UDP</option></select></div>
+                    <div class="field"><label data-i18n="severity">Severity</label><select id="filterSeverity"><option value="">ALL</option><option value="info">INFO</option><option value="low">LOW</option><option value="medium">MEDIUM</option><option value="high">HIGH</option></select></div>
+                    <div class="field"><label data-i18n="sourceIp">Source IP</label><input type="text" id="filterSourceIp" placeholder="10.0.0.5"></div>
+                    <div class="field"><label data-i18n="destinationIp">Destination IP</label><input type="text" id="filterDestinationIp" placeholder="1.1.1.1"></div>
+                    <div class="field"><label data-i18n="minLength">Min length</label><input type="number" id="filterMinLength" min="0"></div>
+                    <div class="field"><label data-i18n="maxLength">Max length</label><input type="number" id="filterMaxLength" min="0"></div>
+                    <div class="field"><label data-i18n="suspiciousOnly">Suspicious only</label><select id="filterSuspiciousOnly"><option value="false" data-i18n="no">No</option><option value="true" data-i18n="yes">Yes</option></select></div>
+                    <div class="field"><label data-i18n="safelistedOnly">Safelisted only</label><select id="filterSafelistedOnly"><option value="false" data-i18n="no">No</option><option value="true" data-i18n="yes">Yes</option></select></div>
+                    <div class="field" style="grid-column: span 2;"><label data-i18n="reasonContains">Reason contains</label><input type="text" id="filterReasonContains" placeholder="sensitive service"></div>
+                </div>
+                <div class="inline-actions">
+                    <button class="btn" id="clearFiltersBtn" data-i18n="clearFilters">Clear</button>
+                    <button class="btn primary" id="applyFiltersBtn" data-i18n="applyFilters">Apply</button>
+                </div>
+            </section>
+            <section class="panel section">
+                <h2 data-i18n="liveFeed">Live feed</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-i18n="timestamp">Timestamp</th>
+                                <th data-i18n="sourceIp">Source</th>
+                                <th data-i18n="destinationIp">Destination</th>
+                                <th data-i18n="protocol">Protocol</th>
+                                <th data-i18n="length">Length</th>
+                                <th data-i18n="type">Type</th>
+                                <th data-i18n="severity">Severity</th>
+                                <th data-i18n="reason">Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="packetTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+        <div class="stack">
+            <section class="panel section">
+                <h2 data-i18n="trafficMix">Traffic composition (pie)</h2>
+                <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+            </section>
+            <section class="panel section">
+                <h2 data-i18n="securityAlerts">Security alerts</h2>
+                <div class="list" id="alertList"></div>
+            </section>
+            <section class="panel section">
+                <h2 data-i18n="safelistedTraffic">Safelisted traffic</h2>
+                <div class="list" id="safeList"></div>
+            </section>
+            <section class="panel section">
+                <h2 data-i18n="selectedPacketAnalysis">Selected packet</h2>
+                <div class="details empty" id="packetDetails" data-i18n="selectPacketHint">Select a packet row to inspect full details.</div>
+            </section>
+        </div>
+    </section>
+
+    <section id="view-intel" class="dash-view">
+        <section class="panel section">
+            <h2 data-i18n="whoisTitle">WhoIs lookup</h2>
+            <div class="filters" style="grid-template-columns: 1fr auto;">
+                <div class="field">
+                    <label data-i18n="ipToLookup">IP to lookup</label>
+                    <input type="text" id="whoisIpInput" placeholder="8.8.8.8">
+                </div>
+                <div class="field" style="align-self: end;">
+                    <button class="btn primary" id="whoisBtn" data-i18n="lookup">Lookup</button>
+                </div>
+            </div>
+            <div class="whois-result empty" id="whoisResult" data-i18n="whoisHint">Click an IP in Live Feed or type one here.</div>
+        </section>
+        <section class="panel section">
+            <h2 data-i18n="panicTitle">Panic button</h2>
+            <div class="panic-box">
+                <h3 data-i18n="panicSubtitle">Generate firewall block command</h3>
+                <div class="filters" style="grid-template-columns: 1fr auto;">
+                    <div class="field">
+                        <label data-i18n="attackerIp">Attacker IP</label>
+                        <input type="text" id="panicIpInput" placeholder="185.220.101.1">
+                    </div>
+                    <div class="field" style="align-self: end;">
+                        <button class="btn primary" id="panicBtn" data-i18n="generate">Generate</button>
+                    </div>
+                </div>
+                <div class="field" style="margin-top: 8px;">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="autoBlockToggle" style="width: auto;">
+                        <span data-i18n="enableAutoBlock">Enable auto-block after confirmation</span>
+                    </label>
+                </div>
+                <label data-i18n="firewallCommand">Firewall command</label>
+                <textarea id="panicCommand" rows="5" readonly></textarea>
+                <div class="inline-actions">
+                    <button class="btn" id="copyPanicBtn" data-i18n="copy">Copy</button>
+                    <button class="btn primary" id="confirmBlockBtn" data-i18n="confirmAndBlock">Confirm and block now</button>
+                </div>
+                <div class="danger-note" data-i18n="panicWarning">
+                    This action writes a firewall block rule in Windows and may require administrator privileges.
+                </div>
+            </div>
+        </section>
+    </section>
+
+    <section id="view-history" class="dash-view">
+        <section class="panel section">
+            <h2 data-i18n="historyTitle">Alert history analytics</h2>
+            <div class="filters" style="grid-template-columns: 180px auto;">
+                <div class="field">
+                    <label data-i18n="windowDays">Window (days)</label>
+                    <select id="historyDays">
+                        <option value="1">1</option>
+                        <option value="3">3</option>
+                        <option value="7" selected>7</option>
+                        <option value="14">14</option>
+                        <option value="30">30</option>
+                    </select>
+                </div>
+                <div class="field" style="align-self: end;">
+                    <button class="btn primary" id="refreshHistoryBtn" data-i18n="refreshHistory">Refresh history</button>
+                </div>
+            </div>
+            <div class="history-grid" style="margin-top: 12px;">
+                <div>
+                    <h2 data-i18n="hourlyPattern">Attack pattern by hour</h2>
+                    <div class="bars" id="hourlyBars"></div>
+                </div>
+                <div>
+                    <h2 data-i18n="microsoftCountries">Microsoft related alert countries</h2>
+                    <div class="country-list" id="microsoftCountries"></div>
+                </div>
+            </div>
+            <div class="history-grid" style="margin-top: 14px;">
+                <div>
+                    <h2 data-i18n="heatmapTitle">Heatmap by day and hour</h2>
+                    <div class="heatmap-grid">
+                        <div class="heatmap-table" id="heatmapGrid"></div>
+                    </div>
+                </div>
+                <div>
+                    <h2 data-i18n="topAttackersTitle">Top attacker IPs by score</h2>
+                    <div class="top-attackers">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-i18n="sourceIp">Source IP</th>
+                                    <th data-i18n="alerts">Alerts</th>
+                                    <th data-i18n="score">Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="topAttackersBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 14px;">
+                <h2 data-i18n="recentAlerts">Recent alerts</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th data-i18n="timestamp">Timestamp</th>
+                                <th data-i18n="sourceIp">Source</th>
+                                <th data-i18n="destinationIp">Destination</th>
+                                <th data-i18n="severity">Severity</th>
+                                <th data-i18n="reason">Reason</th>
+                                <th data-i18n="country">Country</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </section>
+
+    <footer class="footer" id="footerSignature">Made and designed by Mariana Codebase · Snifflux</footer>
+</div>
+
+<script>
+    const socket = io();
+    const MAX_PACKETS_MEMORY = 1200;
+    const MAX_ALERT_ITEMS = 80;
+    const MAX_SAFE_ITEMS = 80;
+    const MAX_CHART_POINTS = 70;
+    const packets = [];
+    let selectedPacketId = null;
+    let lang = localStorage.getItem("snifflux_lang") || "es";
+    let theme = localStorage.getItem("snifflux_theme") || "dark";
+    const lineLabels = [];
+    const lineData = [];
+
+    const i18n = {
+        es: {
+            title: "Snifflux plataforma de seguridad",
+            subtitle: "Defensa de trafico en tiempo real y threat intelligence",
+            totalPackets: "Total paquetes",
+            regularPackets: "Trafico regular",
+            suspiciousPackets: "Paquetes sospechosos",
+            safelistedPackets: "Trafico safelisted",
+            packetsPerSecond: "Paquetes/seg",
+            trafficTimeline: "Linea temporal de trafico",
+            filtersTitle: "Filtros de trafico",
+            fromTimestamp: "Desde",
+            toTimestamp: "Hasta",
+            protocol: "Protocolo",
+            severity: "Severidad",
+            sourceIp: "IP origen",
+            destinationIp: "IP destino",
+            minLength: "Longitud minima",
+            maxLength: "Longitud maxima",
+            suspiciousOnly: "Solo sospechosos",
+            safelistedOnly: "Solo safelisted",
+            reasonContains: "Motivo contiene",
+            clearFilters: "Limpiar",
+            applyFilters: "Aplicar",
+            liveFeed: "Flujo en vivo",
+            timestamp: "Timestamp",
+            length: "Longitud",
+            type: "Tipo",
+            reason: "Motivo",
+            trafficMix: "Composicion de trafico (tarta)",
+            securityAlerts: "Alertas de seguridad",
+            safelistedTraffic: "Trafico safelisted",
+            selectedPacketAnalysis: "Analisis de paquete seleccionado",
+            selectPacketHint: "Selecciona una fila para inspeccionar el contexto completo.",
+            whoisTitle: "WhoIs lookup",
+            ipToLookup: "IP a consultar",
+            lookup: "Consultar",
+            whoisHint: "Haz clic en una IP del feed o escribe una aqui.",
+            panicTitle: "Boton de panico",
+            panicSubtitle: "Generar comando para bloquear IP en firewall",
+            attackerIp: "IP atacante",
+            generate: "Generar",
+            enableAutoBlock: "Habilitar auto-bloqueo tras confirmacion",
+            confirmAndBlock: "Confirmar y bloquear ahora",
+            panicWarning: "Esta accion escribe una regla de bloqueo en el firewall de Windows y puede requerir permisos de administrador.",
+            firewallCommand: "Comando firewall",
+            copy: "Copiar",
+            historyTitle: "Analitica de historial de alertas",
+            windowDays: "Ventana (dias)",
+            refreshHistory: "Actualizar historial",
+            hourlyPattern: "Patron de ataques por hora",
+            microsoftCountries: "Paises de alertas relacionadas con Microsoft",
+            heatmapTitle: "Heatmap por dia y hora",
+            topAttackersTitle: "Top IPs atacantes por scoring",
+            recentAlerts: "Alertas recientes",
+            alerts: "Alertas",
+            score: "Puntaje",
+            country: "Pais",
+            waiting: "Sniffer: esperando estado...",
+            connected: "Sniffer: conectado al backend...",
+            disconnected: "Sniffer: conexion perdida",
+            download: "Descargar reporte",
+            light: "Claro",
+            dark: "Oscuro",
+            no: "No",
+            yes: "Si",
+            emptyAlerts: "Sin alertas sospechosas.",
+            emptySafe: "Sin trafico safelisted.",
+            emptyPackets: "No hay paquetes para estos filtros.",
+            emptyHistory: "Sin registros de alertas en este periodo.",
+            footer: "Hecho y diseñado por Mariana Codebase · Snifflux",
+            copyOk: "Comando copiado.",
+            whoisError: "No fue posible consultar WhoIs.",
+            panicError: "No se pudo generar el comando de bloqueo.",
+            blockSuccess: "IP bloqueada correctamente en firewall.",
+            blockFailed: "No se pudo bloquear la IP.",
+            blockNotEnabled: "Activa la opcion de auto-bloqueo para ejecutar esta accion.",
+            confirmBlockPrompt: "Confirma bloquear esta IP en el firewall local. Esta accion requiere permisos de administrador.",
+            detailsTemplate: (p) => `ID: ${p.id}\nTimestamp: ${p.timestamp}\nOrigen: ${p.source_ip}:${p.source_port || "-"}\nDestino: ${p.destination_ip}:${p.destination_port || "-"}\nProtocolo: ${p.protocol}\nLongitud: ${p.length} bytes\nCategoria: ${p.traffic_category}\nTipo: ${packetType(p)}\nSeveridad: ${p.severity}\nSospechoso: ${p.suspicious ? "Si" : "No"}\nSafelisted: ${p.safelisted ? "Si" : "No"}\nSafe CIDR: ${p.safelist_match || "N/A"}\nMotivo: ${p.suspicious_reason || "N/A"}`
+        },
+        en: {
+            title: "Snifflux security platform",
+            subtitle: "Real-time traffic defense and threat intelligence",
+            totalPackets: "Total packets",
+            regularPackets: "Regular traffic",
+            suspiciousPackets: "Suspicious packets",
+            safelistedPackets: "Safelisted traffic",
+            packetsPerSecond: "Packets/sec",
+            trafficTimeline: "Traffic timeline",
+            filtersTitle: "Traffic filters",
+            fromTimestamp: "From",
+            toTimestamp: "To",
+            protocol: "Protocol",
+            severity: "Severity",
+            sourceIp: "Source IP",
+            destinationIp: "Destination IP",
+            minLength: "Min length",
+            maxLength: "Max length",
+            suspiciousOnly: "Suspicious only",
+            safelistedOnly: "Safelisted only",
+            reasonContains: "Reason contains",
+            clearFilters: "Clear",
+            applyFilters: "Apply",
+            liveFeed: "Live feed",
+            timestamp: "Timestamp",
+            length: "Length",
+            type: "Type",
+            reason: "Reason",
+            trafficMix: "Traffic composition (pie)",
+            securityAlerts: "Security alerts",
+            safelistedTraffic: "Safelisted traffic",
+            selectedPacketAnalysis: "Selected packet analysis",
+            selectPacketHint: "Select a row to inspect full context.",
+            whoisTitle: "WhoIs lookup",
+            ipToLookup: "IP to lookup",
+            lookup: "Lookup",
+            whoisHint: "Click any IP in feed or type one here.",
+            panicTitle: "Panic button",
+            panicSubtitle: "Generate firewall command to block IP",
+            attackerIp: "Attacker IP",
+            generate: "Generate",
+            enableAutoBlock: "Enable auto-block after confirmation",
+            confirmAndBlock: "Confirm and block now",
+            panicWarning: "This action writes a firewall block rule in Windows and may require administrator privileges.",
+            firewallCommand: "Firewall command",
+            copy: "Copy",
+            historyTitle: "Alert history analytics",
+            windowDays: "Window (days)",
+            refreshHistory: "Refresh history",
+            hourlyPattern: "Attack pattern by hour",
+            microsoftCountries: "Microsoft related alert countries",
+            heatmapTitle: "Heatmap by day and hour",
+            topAttackersTitle: "Top attacker IPs by score",
+            recentAlerts: "Recent alerts",
+            alerts: "Alerts",
+            score: "Score",
+            country: "Country",
+            waiting: "Sniffer: waiting...",
+            connected: "Sniffer: connected to backend...",
+            disconnected: "Sniffer: connection lost",
+            download: "Download report",
+            light: "Light",
+            dark: "Dark",
+            no: "No",
+            yes: "Yes",
+            emptyAlerts: "No suspicious alerts.",
+            emptySafe: "No safelisted traffic.",
+            emptyPackets: "No packets match current filters.",
+            emptyHistory: "No alert records in this window.",
+            footer: "Made and designed by Mariana Codebase · Snifflux",
+            copyOk: "Command copied.",
+            whoisError: "WhoIs lookup failed.",
+            panicError: "Could not generate block command.",
+            blockSuccess: "IP successfully blocked in firewall.",
+            blockFailed: "Could not block this IP.",
+            blockNotEnabled: "Enable auto-block option before executing this action.",
+            confirmBlockPrompt: "Confirm blocking this IP in local firewall. This action may require administrator privileges.",
+            detailsTemplate: (p) => `ID: ${p.id}\nTimestamp: ${p.timestamp}\nSource: ${p.source_ip}:${p.source_port || "-"}\nDestination: ${p.destination_ip}:${p.destination_port || "-"}\nProtocol: ${p.protocol}\nLength: ${p.length} bytes\nCategory: ${p.traffic_category}\nType: ${packetType(p)}\nSeverity: ${p.severity}\nSuspicious: ${p.suspicious ? "Yes" : "No"}\nSafelisted: ${p.safelisted ? "Yes" : "No"}\nSafe CIDR: ${p.safelist_match || "N/A"}\nReason: ${p.suspicious_reason || "N/A"}`
+        }
+    };
+
+    const dom = {
+        status: document.getElementById("snifferStatus"),
+        title: document.getElementById("title"),
+        subtitle: document.getElementById("subtitle"),
+        footer: document.getElementById("footerSignature"),
+        totalPackets: document.getElementById("totalPackets"),
+        regularPackets: document.getElementById("regularPackets"),
+        suspiciousPackets: document.getElementById("suspiciousPackets"),
+        safelistedPackets: document.getElementById("safelistedPackets"),
+        currentRate: document.getElementById("currentRate"),
+        tableBody: document.getElementById("packetTableBody"),
+        alertList: document.getElementById("alertList"),
+        safeList: document.getElementById("safeList"),
+        packetDetails: document.getElementById("packetDetails"),
+        whoisResult: document.getElementById("whoisResult"),
+        panicCommand: document.getElementById("panicCommand"),
+        autoBlockToggle: document.getElementById("autoBlockToggle"),
+        confirmBlockBtn: document.getElementById("confirmBlockBtn"),
+        whoisIpInput: document.getElementById("whoisIpInput"),
+        panicIpInput: document.getElementById("panicIpInput"),
+        historyDays: document.getElementById("historyDays"),
+        hourlyBars: document.getElementById("hourlyBars"),
+        microsoftCountries: document.getElementById("microsoftCountries"),
+        historyTableBody: document.getElementById("historyTableBody"),
+        heatmapGrid: document.getElementById("heatmapGrid"),
+        topAttackersBody: document.getElementById("topAttackersBody")
+    };
+
+    const filters = {
+        start_ts: document.getElementById("filterStartTs"),
+        end_ts: document.getElementById("filterEndTs"),
+        protocol: document.getElementById("filterProtocol"),
+        severity: document.getElementById("filterSeverity"),
+        source_ip: document.getElementById("filterSourceIp"),
+        destination_ip: document.getElementById("filterDestinationIp"),
+        min_length: document.getElementById("filterMinLength"),
+        max_length: document.getElementById("filterMaxLength"),
+        suspicious_only: document.getElementById("filterSuspiciousOnly"),
+        safelisted_only: document.getElementById("filterSafelistedOnly"),
+        reason_contains: document.getElementById("filterReasonContains")
+    };
+
+    const lineChart = new Chart(document.getElementById("lineChart").getContext("2d"), {
+        type: "line",
+        data: { labels: [], datasets: [{ label: "Packets/s", data: [], borderColor: "#35d48f", backgroundColor: "rgba(53,212,143,0.15)", borderWidth: 2, fill: true, pointRadius: 1.7, tension: 0.2 }] },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: { legend: { labels: { color: "#e9f0f6" } } },
+            scales: {
+                x: { ticks: { color: "#8ea1b4" }, grid: { color: "rgba(255,255,255,0.08)" } },
+                y: { beginAtZero: true, ticks: { color: "#8ea1b4", precision: 0 }, grid: { color: "rgba(255,255,255,0.08)" } }
+            }
+        }
+    });
+
+    const pieChart = new Chart(document.getElementById("pieChart").getContext("2d"), {
+        type: "doughnut",
+        data: {
+            labels: ["Web", "Video", "Unknown"],
+            datasets: [{ data: [0, 0, 0], backgroundColor: ["#35d48f", "#72c6ff", "#ffcf5b"], borderWidth: 0 }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: "bottom", labels: { color: "#e9f0f6" } }
+            }
+        }
+    });
+
+    function packetType(packet) {
+        if (packet.safelisted) return "safelisted";
+        if (packet.suspicious) return "suspicious";
+        return "regular";
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function t(key) { return i18n[lang][key] || key; }
+
+    function applyTheme() {
+        document.body.classList.toggle("light", theme === "light");
+        localStorage.setItem("snifflux_theme", theme);
+        document.getElementById("themeBtn").textContent = theme === "dark" ? t("light") : t("dark");
+        const text = getComputedStyle(document.body).getPropertyValue("--text").trim();
+        const muted = getComputedStyle(document.body).getPropertyValue("--muted").trim();
+        lineChart.options.plugins.legend.labels.color = text;
+        lineChart.options.scales.x.ticks.color = muted;
+        lineChart.options.scales.y.ticks.color = muted;
+        pieChart.options.plugins.legend.labels.color = text;
+        lineChart.update("none");
+        pieChart.update("none");
+    }
+
+    function applyI18n() {
+        localStorage.setItem("snifflux_lang", lang);
+        document.documentElement.lang = lang;
+        dom.title.textContent = t("title");
+        dom.subtitle.textContent = t("subtitle");
+        dom.footer.textContent = t("footer");
+        document.getElementById("downloadBtn").textContent = t("download");
+        document.getElementById("langBtn").textContent = lang === "es" ? "EN" : "ES";
+        document.getElementById("themeBtn").textContent = theme === "dark" ? t("light") : t("dark");
+        document.querySelectorAll("[data-i18n]").forEach(el => {
+            const key = el.getAttribute("data-i18n");
+            el.textContent = t(key);
+        });
+        renderTable();
+        renderLists();
+        if (selectedPacketId === null) {
+            dom.packetDetails.classList.add("empty");
+            dom.packetDetails.textContent = t("selectPacketHint");
+        }
+    }
+
+    function setStatus(status, message) {
+        dom.status.className = `status ${status || ""}`;
+        dom.status.textContent = `Sniffer: ${message || status}`;
+    }
+
+    function currentFilters() {
+        return Object.fromEntries(Object.entries(filters).map(([key, el]) => [key, el.value.trim()]));
+    }
+
+    function packetMatches(packet, f) {
+        if (f.suspicious_only === "true" && !packet.suspicious) return false;
+        if (f.safelisted_only === "true" && !packet.safelisted) return false;
+        if (f.protocol && packet.protocol.toUpperCase() !== f.protocol.toUpperCase()) return false;
+        if (f.severity && String(packet.severity || "").toLowerCase() !== f.severity.toLowerCase()) return false;
+        if (f.source_ip && !packet.source_ip.includes(f.source_ip)) return false;
+        if (f.destination_ip && !packet.destination_ip.includes(f.destination_ip)) return false;
+        if (f.min_length && packet.length < Number(f.min_length)) return false;
+        if (f.max_length && packet.length > Number(f.max_length)) return false;
+        if (f.reason_contains && !String(packet.suspicious_reason || "").toLowerCase().includes(f.reason_contains.toLowerCase())) return false;
+        if (f.start_ts && new Date(packet.timestamp_iso) < new Date(f.start_ts)) return false;
+        if (f.end_ts && new Date(packet.timestamp_iso) > new Date(f.end_ts)) return false;
+        return true;
+    }
+
+    function typePill(packet) {
+        const type = packetType(packet);
+        const label = type === "suspicious" ? "ALERT" : (type === "safelisted" ? "SAFE" : "REGULAR");
+        return `<span class="pill ${type}">${label}</span>`;
+    }
+
+    function formatIp(ip, port) {
+        const safeIp = escapeHtml(String(ip || "N/A"));
+        const withPort = `${safeIp}${port ? ":" + port : ""}`;
+        if (safeIp === "N/A") return withPort;
+        return `<span class="clickable-ip" data-ip="${safeIp}">${withPort}</span>`;
+    }
+
+    function renderTable() {
+        const list = packets.filter(pkt => packetMatches(pkt, currentFilters()));
+        dom.tableBody.innerHTML = "";
+        if (!list.length) {
+            dom.tableBody.innerHTML = `<tr><td colspan="8" class="empty">${t("emptyPackets")}</td></tr>`;
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        list.forEach(pkt => {
+            const tr = document.createElement("tr");
+            tr.classList.add(packetType(pkt));
+            if (selectedPacketId === pkt.id) tr.classList.add("selected");
+            tr.innerHTML = `
+                <td>${escapeHtml(pkt.timestamp)}</td>
+                <td>${formatIp(pkt.source_ip, pkt.source_port)}</td>
+                <td>${formatIp(pkt.destination_ip, pkt.destination_port)}</td>
+                <td>${escapeHtml(pkt.protocol)}</td>
+                <td>${escapeHtml(pkt.length)}</td>
+                <td>${typePill(pkt)}</td>
+                <td>${escapeHtml(pkt.severity || "-")}</td>
+                <td>${escapeHtml(pkt.suspicious_reason || "-")}</td>
+            `;
+
+            tr.addEventListener("click", () => {
+                selectedPacketId = pkt.id;
+                renderTable();
+                dom.packetDetails.classList.remove("empty");
+                dom.packetDetails.textContent = i18n[lang].detailsTemplate(pkt);
+                dom.panicIpInput.value = pkt.source_ip !== "N/A" ? pkt.source_ip : "";
+            });
+            fragment.appendChild(tr);
+        });
+        dom.tableBody.appendChild(fragment);
+
+        dom.tableBody.querySelectorAll(".clickable-ip").forEach(el => {
+            el.addEventListener("click", async (event) => {
+                event.stopPropagation();
+                const ip = el.dataset.ip;
+                dom.whoisIpInput.value = ip;
+                await runWhois(ip);
+                activateView("intel");
+            });
+        });
+    }
+
+    function renderLists() {
+        const alerts = packets.filter(p => p.suspicious).slice(0, MAX_ALERT_ITEMS);
+        const safed = packets.filter(p => p.safelisted).slice(0, MAX_SAFE_ITEMS);
+
+        dom.alertList.innerHTML = alerts.length ? "" : `<div class="item empty">${t("emptyAlerts")}</div>`;
+        alerts.forEach(pkt => {
+            const node = document.createElement("div");
+            node.className = "item alert";
+            node.innerHTML = `
+                <div><strong>ALERT</strong> ${escapeHtml(pkt.timestamp)}</div>
+                <div>${escapeHtml(pkt.source_ip)} -> ${escapeHtml(pkt.destination_ip)}</div>
+                <div>${escapeHtml(pkt.protocol)} | ${escapeHtml(pkt.length)} bytes</div>
+                <div>${escapeHtml(pkt.suspicious_reason || "-")}</div>
+            `;
+            dom.alertList.appendChild(node);
+        });
+
+        dom.safeList.innerHTML = safed.length ? "" : `<div class="item empty">${t("emptySafe")}</div>`;
+        safed.forEach(pkt => {
+            const node = document.createElement("div");
+            node.className = "item safe";
+            node.innerHTML = `
+                <div><strong>SAFE</strong> ${escapeHtml(pkt.timestamp)}</div>
+                <div>${escapeHtml(pkt.source_ip)} -> ${escapeHtml(pkt.destination_ip)}</div>
+                <div>${escapeHtml(pkt.protocol)} | ${escapeHtml(pkt.length)} bytes</div>
+                <div>${escapeHtml(pkt.safelist_match || "-")}</div>
+            `;
+            dom.safeList.appendChild(node);
+        });
+    }
+
+    function pushPacket(packet) {
+        packets.unshift(packet);
+        if (packets.length > MAX_PACKETS_MEMORY) packets.pop();
+        renderTable();
+        renderLists();
+    }
+
+    function updatePie(mix) {
+        const web = mix?.web || 0;
+        const video = mix?.video || 0;
+        const unknown = mix?.unknown || 0;
+        pieChart.data.datasets[0].data = [web, video, unknown];
+        pieChart.update("none");
+    }
+
+    function buildReportUrl() {
+        const params = new URLSearchParams();
+        Object.entries(currentFilters()).forEach(([key, val]) => {
+            if (val !== "") params.set(key, val);
+        });
+        return `/download-report?${params.toString()}`;
+    }
+
+    async function runWhois(ip) {
+        if (!ip) return;
+        dom.whoisResult.classList.remove("empty");
+        dom.whoisResult.textContent = "...";
+        try {
+            const res = await fetch(`/api/whois?ip=${encodeURIComponent(ip)}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "lookup error");
+            dom.whoisResult.textContent =
+                `IP: ${data.ip}\nOwner: ${data.owner}\nASN: ${data.asn}\nCountry: ${data.country}`;
+            dom.panicIpInput.value = data.ip;
+        } catch {
+            dom.whoisResult.textContent = t("whoisError");
+        }
+    }
+
+    async function generatePanicCommand(ip) {
+        if (!ip) return;
+        dom.panicCommand.value = "...";
+        try {
+            const res = await fetch(`/api/panic-command?ip=${encodeURIComponent(ip)}`);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "panic error");
+            dom.panicCommand.value =
+                `# netsh\n${data.netsh_command}\n\n# PowerShell\n${data.powershell_command}`;
+        } catch {
+            dom.panicCommand.value = t("panicError");
+        }
+    }
+
+    async function executeAutoBlock(ip) {
+        if (!ip) return;
+        if (!dom.autoBlockToggle.checked) {
+            alert(t("blockNotEnabled"));
+            return;
+        }
+        if (!confirm(t("confirmBlockPrompt"))) {
+            return;
+        }
+        try {
+            const res = await fetch("/api/auto-block", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ip, confirmed: true })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.output || data.error || "block failed");
+            }
+            dom.panicCommand.value = data.command || dom.panicCommand.value;
+            alert(t("blockSuccess"));
+        } catch (error) {
+            dom.panicCommand.value = `${t("blockFailed")}\n${error.message || ""}`.trim();
+            alert(t("blockFailed"));
+        }
+    }
+
+    function renderHourlyBars(hourlyRows) {
+        dom.hourlyBars.innerHTML = "";
+        const map = {};
+        (hourlyRows || []).forEach(row => { map[row.hour] = row.count; });
+        const max = Math.max(1, ...Object.values(map));
+        for (let h = 0; h < 24; h++) {
+            const key = String(h).padStart(2, "0");
+            const count = map[key] || 0;
+            const bar = document.createElement("div");
+            bar.className = "bar";
+            bar.dataset.hour = key;
+            bar.title = `${key}:00 -> ${count}`;
+            bar.style.height = `${Math.max(8, (count / max) * 130)}px`;
+            dom.hourlyBars.appendChild(bar);
+        }
+    }
+
+    function renderCountryList(container, rows) {
+        container.innerHTML = "";
+        if (!rows || !rows.length) {
+            container.innerHTML = `<div class="empty">${t("emptyHistory")}</div>`;
+            return;
+        }
+        rows.forEach(row => {
+            const div = document.createElement("div");
+            div.className = "country-item";
+            div.innerHTML = `<span>${escapeHtml(row.country || "Unknown")}</span><strong>${escapeHtml(row.count)}</strong>`;
+            container.appendChild(div);
+        });
+    }
+
+    function renderHistoryTable(rows) {
+        dom.historyTableBody.innerHTML = "";
+        if (!rows || !rows.length) {
+            dom.historyTableBody.innerHTML = `<tr><td colspan="7" class="empty">${t("emptyHistory")}</td></tr>`;
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        rows.forEach(row => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${escapeHtml(row.packet_id || "-")}</td>
+                <td>${escapeHtml(row.timestamp || "-")}</td>
+                <td>${escapeHtml(row.source_ip || "-")}</td>
+                <td>${escapeHtml(row.destination_ip || "-")}</td>
+                <td>${escapeHtml(row.severity || "-")}</td>
+                <td>${escapeHtml(row.reason || "-")}</td>
+                <td>${escapeHtml(row.country || "-")}</td>
+            `;
+            frag.appendChild(tr);
+        });
+        dom.historyTableBody.appendChild(frag);
+    }
+
+    function renderHeatmap(heatmapRows) {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const matrix = {};
+        let maxValue = 0;
+        (heatmapRows || []).forEach(row => {
+            const key = `${row.weekday}-${row.hour}`;
+            matrix[key] = row.count;
+            if (row.count > maxValue) maxValue = row.count;
+        });
+        maxValue = Math.max(maxValue, 1);
+
+        dom.heatmapGrid.innerHTML = "";
+        const fragment = document.createDocumentFragment();
+
+        // Header
+        const corner = document.createElement("div");
+        corner.className = "heat-label";
+        corner.textContent = "D/H";
+        fragment.appendChild(corner);
+        for (let h = 0; h < 24; h++) {
+            const label = document.createElement("div");
+            label.className = "heat-label";
+            label.textContent = String(h).padStart(2, "0");
+            fragment.appendChild(label);
+        }
+
+        for (let d = 0; d < 7; d++) {
+            const dayLabel = document.createElement("div");
+            dayLabel.className = "heat-label";
+            dayLabel.textContent = days[d];
+            fragment.appendChild(dayLabel);
+            for (let h = 0; h < 24; h++) {
+                const hour = String(h).padStart(2, "0");
+                const key = `${d}-${hour}`;
+                const count = matrix[key] || 0;
+                const intensity = count / maxValue;
+                const alpha = 0.08 + (0.72 * intensity);
+                const cell = document.createElement("div");
+                cell.className = "heat-cell";
+                cell.title = `${days[d]} ${hour}:00 -> ${count}`;
+                cell.style.backgroundColor = `rgba(53, 212, 143, ${alpha.toFixed(3)})`;
+                cell.textContent = count > 0 ? String(count) : "";
+                fragment.appendChild(cell);
+            }
+        }
+        dom.heatmapGrid.appendChild(fragment);
+    }
+
+    function renderTopAttackers(rows) {
+        dom.topAttackersBody.innerHTML = "";
+        if (!rows || !rows.length) {
+            dom.topAttackersBody.innerHTML = `<tr><td colspan="3" class="empty">${t("emptyHistory")}</td></tr>`;
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        rows.forEach(row => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>${escapeHtml(row.source_ip || "-")}</td>
+                <td>${escapeHtml(row.total_alerts ?? 0)}</td>
+                <td>${escapeHtml(row.score ?? 0)}</td>
+            `;
+            frag.appendChild(tr);
+        });
+        dom.topAttackersBody.appendChild(frag);
+    }
+
+    async function refreshHistory() {
+        const days = dom.historyDays.value || "7";
+        try {
+            const res = await fetch(`/api/alert-history?days=${encodeURIComponent(days)}`);
+            const data = await res.json();
+            renderHourlyBars(data.hourly_pattern || []);
+            renderCountryList(dom.microsoftCountries, data.microsoft_countries || []);
+            renderHeatmap(data.heatmap || []);
+            renderTopAttackers(data.top_attackers || []);
+            renderHistoryTable(data.recent_alerts || []);
+        } catch {
+            renderHourlyBars([]);
+            renderCountryList(dom.microsoftCountries, []);
+            renderHeatmap([]);
+            renderTopAttackers([]);
+            renderHistoryTable([]);
+        }
+    }
+
+    function activateView(view) {
+        document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab.dataset.view === view));
+        document.querySelectorAll(".dash-view").forEach(section => section.classList.remove("active"));
+        const target = document.getElementById(`view-${view}`);
+        if (target) target.classList.add("active");
+    }
+
+    document.getElementById("downloadBtn").addEventListener("click", () => { window.location.href = buildReportUrl(); });
+    document.getElementById("langBtn").addEventListener("click", () => { lang = lang === "es" ? "en" : "es"; applyI18n(); applyTheme(); });
+    document.getElementById("themeBtn").addEventListener("click", () => { theme = theme === "dark" ? "light" : "dark"; applyTheme(); });
+    document.getElementById("applyFiltersBtn").addEventListener("click", renderTable);
+    document.getElementById("clearFiltersBtn").addEventListener("click", () => {
+        Object.values(filters).forEach(el => { el.value = ""; });
+        filters.suspicious_only.value = "false";
+        filters.safelisted_only.value = "false";
+        renderTable();
+    });
+    document.getElementById("whoisBtn").addEventListener("click", () => runWhois(dom.whoisIpInput.value.trim()));
+    document.getElementById("panicBtn").addEventListener("click", () => generatePanicCommand(dom.panicIpInput.value.trim()));
+    document.getElementById("confirmBlockBtn").addEventListener("click", () => executeAutoBlock(dom.panicIpInput.value.trim()));
+    document.getElementById("copyPanicBtn").addEventListener("click", async () => {
+        if (!dom.panicCommand.value) return;
+        await navigator.clipboard.writeText(dom.panicCommand.value);
+        alert(t("copyOk"));
+    });
+    document.getElementById("refreshHistoryBtn").addEventListener("click", refreshHistory);
+
+    document.querySelectorAll(".tab").forEach(tab => {
+        tab.addEventListener("click", () => activateView(tab.dataset.view));
+    });
+
+    socket.on("connect", () => setStatus("starting", t("connected")));
+    socket.on("disconnect", () => setStatus("error", t("disconnected")));
+    socket.on("sniffer_status", payload => setStatus(payload.status, payload.message));
+
+    socket.on("regular_packet", pushPacket);
+    socket.on("suspicious_packet", pushPacket);
+    socket.on("safelisted_packet", pushPacket);
+
+    socket.on("packet_stats", stats => {
+        dom.totalPackets.textContent = stats.total ?? 0;
+        dom.regularPackets.textContent = stats.regular ?? 0;
+        dom.suspiciousPackets.textContent = stats.suspicious ?? 0;
+        dom.safelistedPackets.textContent = stats.safelisted ?? 0;
+        dom.currentRate.textContent = stats.current_second_count ?? 0;
+    });
+
+    socket.on("traffic_mix_update", updatePie);
+
+    socket.on("packet_count_update", payload => {
+        lineLabels.push(new Date(payload.timestamp * 1000).toLocaleTimeString());
+        lineData.push(payload.count);
+        if (lineData.length > MAX_CHART_POINTS) {
+            lineData.shift();
+            lineLabels.shift();
+        }
+        lineChart.data.labels = lineLabels;
+        lineChart.data.datasets[0].data = lineData;
+        lineChart.update("none");
+    });
+
+    applyI18n();
+    applyTheme();
+    setStatus("waiting", t("waiting"));
+    refreshHistory();
+</script>
+</body>
+</html>
