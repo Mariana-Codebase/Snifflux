@@ -1,4 +1,4 @@
-//NETWORK SECURITY MONITORING
+//NSM
 
 # Snifflux
 
